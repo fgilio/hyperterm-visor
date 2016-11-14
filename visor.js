@@ -2,25 +2,17 @@
 
 const remove = require('lodash.remove');
 const electron = require('electron');
+const log = require('electron-log');
 const { globalShortcut } = electron;
 
-const DEBUG = false;
+const DEBUG = process.env.NODE_ENV === 'development' || process.env.DEBUG || false;
 
 module.exports = class Visor {
-    constructor(config = {}) {
-        this.windowStack = [];
+    constructor(app, visorWindow = null) {
+        this.app = app;
+        this.config = app.config.getConfig().visor || {};
+        this.visorWindow = visorWindow;
 
-        this.visorWindow = null;
-        this.oldBounds = null;
-        this.config = config;
-
-        // if no hotkey, don't do anything!
-        this.registerGlobalHotkey();
-    }
-
-    setConfig(config = {}) {
-        this.unregisterGlobalHotkey();
-        this.config = config;
         this.registerGlobalHotkey();
     }
 
@@ -47,7 +39,11 @@ module.exports = class Visor {
     toggleWindow() {
         debug('toggling window');
 
-        if (!this.visorWindow) return;
+        if (!this.visorWindow) {
+            // if no visor window, create one and try toggling again after it's created
+            this.createNewVisorWindow(() => this.toggleWindow());
+            return;
+        }
 
         if (this.visorWindow.isFocused()) {
             this.visorWindow.hide();
@@ -61,8 +57,6 @@ module.exports = class Visor {
         debug(`setting position to ${this.config.position}`);
 
         if (!this.config.position) return;
-
-        this.oldBounds = this.visorWindow.getBounds();
 
         const screen = electron.screen;
         const point = screen.getCursorScreenPoint();
@@ -97,42 +91,39 @@ module.exports = class Visor {
         this.visorWindow.setBounds(bounds);
     }
 
-    restoreBounds() {
-        if (!this.config.position) return;
+    createNewVisorWindow(callback) {
+        debug('creating new window');
 
-        if (this.oldBounds) {
-            this.visorWindow.setBounds(this.oldBounds);
-        }
-    }
+        this.app.createWindow(win => {
+            this.visorWindow = win;
 
-    registerWindow(win) {
-        const onClose = () => {
-            debug('closing', win.id);
+            // creates a shell in the new window
+            // @TODO revisit this after resolution of https://github.com/zeit/hyper/pull/976
+            win.rpc.emit('termgroup add req');
 
-            remove(this.windowStack, { id: win.id });
+            this.visorWindow.on('close', () => {
+                debug('closing');
 
-            if (this.visorWindow.id === win.id) {
-                this.visorWindow = this.windowStack.length ? this.windowStack[this.windowStack.length - 1] : null;
+                this.visorWindow = null;
+            });
+
+            if (callback) {
+                callback();
             }
-        };
-
-        debug('registering new window', win.id);
-
-        win.on('close', onClose);
-
-        this.windowStack.push(win);
-        this.visorWindow = win;
+        });
     }
 
     destroy() {
         this.unregisterGlobalHotkey();
+        this.visorWindow = null;
 
+        debug('destroyed');
         // @TODO other cleanup?
     }
 };
 
 function debug(...args) {
     if (DEBUG) {
-        console.log(...args);
+        log.info(...args);
     }
 }
