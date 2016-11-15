@@ -13,6 +13,10 @@ module.exports = class Visor {
         this.config = app.config.getConfig().visor || {};
         this.visorWindow = visorWindow;
 
+        if (this.visorWindow) {
+            this.setBounds();
+        }
+
         this.registerGlobalHotkey();
     }
 

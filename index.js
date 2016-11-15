@@ -1,6 +1,7 @@
 'use strict';
 
 const Visor = require('./visor');
+const log = require('electron-log');
 
 let visor;
 
@@ -10,6 +11,13 @@ module.exports.onApp = function registerGlobalHotkey(app) {
     if (visor) {
         visorWindow = visor.visorWindow;
         visor.destroy();
+    }
+
+    if (!visorWindow) {
+        const windows = app.getWindows();
+        if (windows.size === 1) {
+            visorWindow = windows.values().next().value;
+        }
     }
 
     visor = new Visor(app, visorWindow);
