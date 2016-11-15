@@ -13,6 +13,7 @@ module.exports.onApp = function registerGlobalHotkey(app) {
         visor.destroy();
     }
 
+    // on load, set the first window that loads as the visor
     if (!visorWindow) {
         const windows = app.getWindows();
         if (windows.size === 1) {
